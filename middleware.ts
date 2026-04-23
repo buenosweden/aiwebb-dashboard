@@ -28,6 +28,7 @@ export async function middleware(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
 
   const isAuthPage = request.nextUrl.pathname.startsWith("/login");
+  const isOnboarding = request.nextUrl.pathname.startsWith("/onboarding");
   const isProtectedPage = request.nextUrl.pathname.startsWith("/hantera");
 
   if (!user && isProtectedPage) {

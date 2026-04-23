@@ -44,7 +44,6 @@
 
   body {
     @apply bg-background text-foreground;
-    font-family: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif;
     letter-spacing: -0.011em;
   }
 

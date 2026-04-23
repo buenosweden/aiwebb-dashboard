@@ -4,6 +4,7 @@ import { SectionList } from "@/components/sektioner/section-list";
 import { PublishButton } from "@/components/layout/publish-button";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
+import Link from "next/link";
 import type { Section } from "@/lib/payload";
 
 export default async function HanteraPage() {
@@ -31,8 +32,12 @@ export default async function HanteraPage() {
         {sections.length === 0 ? (
           <div className="rounded-lg border border-dashed p-12 text-center">
             <h2 className="text-sm font-medium mb-1">Din sida är tom</h2>
-            <p className="text-sm text-muted-foreground mb-4">Börja med onboardingen för att generera din första sida.</p>
-            <Button size="sm">Starta onboarding</Button>
+            <p className="text-sm text-muted-foreground mb-4">
+              Låt AI bygga din sajt på under 2 minuter.
+            </p>
+            <Button size="sm" asChild>
+              <Link href="/onboarding">Starta onboarding</Link>
+            </Button>
           </div>
         ) : (
           <>
