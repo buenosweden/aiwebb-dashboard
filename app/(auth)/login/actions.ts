@@ -13,7 +13,7 @@ export async function login(formData: FormData) {
   const { error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {
-    return { error: error.message };
+    redirect("/login?error=" + encodeURIComponent(error.message));
   }
 
   revalidatePath("/", "layout");
@@ -35,10 +35,10 @@ export async function signup(formData: FormData) {
   });
 
   if (error) {
-    return { error: error.message };
+    redirect("/login?error=" + encodeURIComponent(error.message));
   }
 
-  return { success: "Kolla din mejl för verifiering." };
+  redirect("/login?message=Kolla+din+mejl+för+verifiering");
 }
 
 export async function signOut() {
