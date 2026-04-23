@@ -13,6 +13,39 @@ interface Message {
 
 type Phase = "chatting" | "generating" | "done" | "error";
 
+const QUICK_REPLIES: Record<number, string[]> = {
+  0: [],
+  1: [
+    "Hantverkstjänster (bygg, el, VVS)",
+    "Restaurang eller café",
+    "Konsult eller rådgivning",
+    "Butik eller e-handel",
+    "Hälsa, skönhet eller träning",
+    "IT eller tech",
+  ],
+  2: [
+    "Privatpersoner i hela Sverige",
+    "Företag och organisationer",
+    "Lokala kunder i min stad",
+    "Både privat och företag",
+  ],
+  3: [
+    "Snabb leverans och tillgänglighet",
+    "Lång erfarenhet och expertis",
+    "Personlig service och omsorg",
+    "Bästa pris på marknaden",
+    "Unik produkt eller metod",
+  ],
+  4: [
+    "#1E3A8A (mörkblå)",
+    "#166534 (mörkgrön)",
+    "#9A3412 (rostrött)",
+    "#1F2937 (antracit)",
+    "#7C3AED (lila)",
+    "#0F766E (teal)",
+  ],
+};
+
 export default function OnboardingPage() {
   const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -20,13 +53,17 @@ export default function OnboardingPage() {
   const [loading, setLoading] = useState(false);
   const [phase, setPhase] = useState<Phase>("chatting");
   const [answers, setAnswers] = useState<string[]>([]);
+  const [questionIndex, setQuestionIndex] = useState(0);
   const [generatingText, setGeneratingText] = useState("Genererar din sajt...");
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const hasStarted = useRef(false);
 
-  // Starta med första AI-frågan
   useEffect(() => {
-    askAI([]);
+    if (!hasStarted.current) {
+      hasStarted.current = true;
+      askAI([]);
+    }
   }, []);
 
   useEffect(() => {
@@ -80,18 +117,23 @@ export default function OnboardingPage() {
     }
   }
 
-  async function handleSend() {
-    if (!input.trim() || loading || phase !== "chatting") return;
+  async function sendAnswer(text: string) {
+    if (!text.trim() || loading || phase !== "chatting") return;
 
-    const userMessage: Message = { role: "user", content: input.trim() };
-    const newAnswers = [...answers, input.trim()];
+    const userMessage: Message = { role: "user", content: text.trim() };
+    const newAnswers = [...answers, text.trim()];
     setAnswers(newAnswers);
+    setQuestionIndex(newAnswers.length);
 
     const newMessages = [...messages, userMessage];
     setMessages(newMessages);
     setInput("");
 
     await askAI(newMessages);
+  }
+
+  async function handleSend() {
+    await sendAnswer(input);
   }
 
   async function generateSite(finalAnswers: string[]) {
@@ -136,6 +178,8 @@ export default function OnboardingPage() {
     }
   }
 
+  const currentQuickReplies = QUICK_REPLIES[questionIndex] ?? [];
+
   if (phase === "generating" || phase === "done") {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -162,7 +206,10 @@ export default function OnboardingPage() {
           </div>
           {phase === "generating" && (
             <div className="w-full bg-secondary rounded-full h-1.5 overflow-hidden">
-              <div className="h-full bg-primary rounded-full animate-pulse" style={{ width: "60%" }} />
+              <div
+                className="h-full bg-primary rounded-full transition-all duration-1000"
+                style={{ width: `${Math.min((answers.length / 5) * 100 + 20, 90)}%` }}
+              />
             </div>
           )}
         </div>
@@ -193,7 +240,7 @@ export default function OnboardingPage() {
           {[1, 2, 3, 4, 5].map((n) => (
             <div
               key={n}
-              className={`h-1.5 w-6 rounded-full transition-colors ${
+              className={`h-1.5 w-6 rounded-full transition-colors duration-300 ${
                 n <= answers.length ? "bg-primary" : "bg-secondary"
               }`}
             />
@@ -233,6 +280,23 @@ export default function OnboardingPage() {
         <div ref={bottomRef} />
       </div>
 
+      {/* Snabbval */}
+      {!loading && currentQuickReplies.length > 0 && phase === "chatting" && (
+        <div className="px-4 pb-3 max-w-2xl mx-auto w-full">
+          <div className="flex flex-wrap gap-2">
+            {currentQuickReplies.map((reply) => (
+              <button
+                key={reply}
+                onClick={() => sendAnswer(reply)}
+                className="text-xs px-3 py-1.5 rounded-full border border-input bg-background hover:bg-secondary hover:border-foreground/30 transition-colors"
+              >
+                {reply}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Input */}
       <div className="border-t px-4 py-4">
         <div className="max-w-2xl mx-auto flex gap-2">
@@ -241,7 +305,7 @@ export default function OnboardingPage() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
-            placeholder="Skriv ditt svar..."
+            placeholder={currentQuickReplies.length > 0 ? "Eller skriv ditt eget svar..." : "Skriv ditt svar..."}
             disabled={loading}
             className="flex-1"
           />
@@ -258,7 +322,7 @@ export default function OnboardingPage() {
           </Button>
         </div>
         <p className="text-center text-xs text-muted-foreground mt-2">
-          Tryck Enter för att skicka
+          Välj ett alternativ eller skriv ditt eget svar
         </p>
       </div>
     </div>
