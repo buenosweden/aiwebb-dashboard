@@ -23,12 +23,16 @@ Ställ EXAKT 5 frågor en i taget:
 
 REGLER: EN fråga i taget. Max 2 meningar innan frågan. Efter svar på fråga 5: skriv exakt ONBOARDING_COMPLETE`;
 
+  const history = messages.length === 0
+    ? [{ role: "user" as const, content: "Hej, jag vill skapa en hemsida." }]
+    : messages;
+
   try {
     const stream = await client.messages.stream({
       model: "claude-sonnet-4-5",
       max_tokens: 400,
       system: SYSTEM_PROMPT,
-      messages,
+      messages: history,
     });
 
     const encoder = new TextEncoder();
