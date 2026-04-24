@@ -25,7 +25,7 @@ REGLER: EN fråga i taget. Max 2 meningar innan frågan. Efter svar på fråga 5
 
   try {
     const stream = await client.messages.stream({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-5",
       max_tokens: 400,
       system: SYSTEM_PROMPT,
       messages,
