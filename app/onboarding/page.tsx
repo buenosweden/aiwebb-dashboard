@@ -34,13 +34,16 @@ function OnboardingContent() {
   const [profile, setProfile] = useState<{full_name?: string; company_name?: string} | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const chatStarted = useRef(false);
 
-  // Steg 1: Hämta profil
   useEffect(() => {
     const supabase = createClient();
     supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (user) {
-        const { data } = await supabase.from("profiles").select("full_name, company_name").eq("id", user.id).maybeSingle();
+        const { data } = await supabase.from("profiles")
+          .select("full_name, company_name")
+          .eq("id", user.id)
+          .maybeSingle();
         setProfile(data ?? {});
       } else {
         setProfile({});
@@ -48,11 +51,11 @@ function OnboardingContent() {
     }).catch(() => setProfile({}));
   }, []);
 
-  // Steg 2: Starta chatt när profil är klar
   useEffect(() => {
-    if (profile === null) return; // Vänta tills profil är hämtad
-    const timer = setTimeout(() => askAI([], profile), 300);
-    return () => clearTimeout(timer);
+    if (profile === null) return;
+    if (chatStarted.current) return;
+    chatStarted.current = true;
+    askAI([], profile);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile]);
 
@@ -60,13 +63,13 @@ function OnboardingContent() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  async function askAI(history: Message[], currentProfile?: {full_name?: string; company_name?: string}) {
+  async function askAI(history: Message[], currentProfile: {full_name?: string; company_name?: string}) {
     setLoading(true);
     try {
       const res = await fetch("/api/onboarding", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: history, profile: currentProfile ?? profile ?? {} }),
+        body: JSON.stringify({ messages: history, profile: currentProfile }),
       });
       if (!res.ok || !res.body) { setLoading(false); return; }
 
@@ -93,13 +96,16 @@ function OnboardingContent() {
       if (full.includes("ONBOARDING_COMPLETE")) {
         setMessages(prev => {
           const updated = [...prev];
-          updated[updated.length - 1] = { role: "assistant", content: full.replace("ONBOARDING_COMPLETE", "").trim() };
+          updated[updated.length - 1] = {
+            role: "assistant",
+            content: full.replace("ONBOARDING_COMPLETE", "").trim()
+          };
           return updated;
         });
         setTimeout(() => generateSite(answers), 800);
       }
     } catch (err) {
-      console.error("askAI error:", err);
+      console.error(err);
       setLoading(false);
     }
   }
@@ -112,7 +118,7 @@ function OnboardingContent() {
     const newMessages = [...messages, { role: "user" as const, content: text.trim() }];
     setMessages(newMessages);
     setInput("");
-    await askAI(newMessages);
+    await askAI(newMessages, profile ?? {});
   }
 
   async function generateSite(finalAnswers: string[]) {
@@ -162,13 +168,12 @@ function OnboardingContent() {
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center space-y-4">
           <p className="text-sm text-muted-foreground">Något gick fel. Försök igen.</p>
-          <Button onClick={() => { setProfile(null); router.push("/onboarding"); }}>Börja om</Button>
+          <Button onClick={() => router.push("/onboarding")}>Börja om</Button>
         </div>
       </div>
     );
   }
 
-  // Visa loader medan profil hämtas
   if (profile === null) {
     return (
       <div className="min-h-screen flex items-center justify-center">
