@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Send, Loader2, CheckCircle } from "lucide-react";
 import { Suspense } from "react";
+import { GeneratingScreen } from "./generating";
 import { createClient } from "@/lib/supabase-client";
 
 interface Message { role: "user" | "assistant"; content: string; }
@@ -142,7 +143,7 @@ function OnboardingContent() {
     } catch { clearInterval(interval); setPhase("error"); }
   }
 
-  if (phase === "generating" || phase === "done") {
+  if (phase === "generating") return <GeneratingScreen />;\n\n  if (phase === "done") {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center space-y-6 max-w-sm px-6">
