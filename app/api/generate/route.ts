@@ -4,162 +4,120 @@ import { createClient } from "@/lib/supabase-server";
 import { publishToWordPress } from "@/lib/wordpress";
 import type { Payload } from "@/lib/payload";
 
-const client = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
+const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-const GENERATE_PROMPT = `Du är en expert på att skapa professionella svenska hemsidor. Baserat på företagsinformationen nedan, generera en komplett hemsida-payload i JSON-format.
-
-VIKTIGT: Svara ENDAST med giltig JSON. Inga förklaringar, inga markdown-backticks, bara ren JSON.
-
-JSON-schemat ska följa denna exakta struktur:
-{
-  "page": {
-    "title": "string",
-    "slug": "hem",
-    "is_front_page": true,
-    "template": "landing"
-  },
-  "brand": {
-    "name": "string",
-    "primary_color": "#hexkod",
-    "tone": "professional"
-  },
-  "seo": {
-    "meta_title": "string (max 60 tecken)",
-    "meta_description": "string (max 155 tecken)",
-    "focus_keyword": "string"
-  },
-  "sections": [
-    {
-      "type": "hero",
-      "data": {
-        "eyebrow": "kort eyebrow-text",
-        "headline": "stark huvudrubrik (max 8 ord)",
-        "subheadline": "förklarande text (1-2 meningar)",
-        "primary_cta": {"label": "knapptext", "url": "#kontakt", "style": "primary"},
-        "secondary_cta": {"label": "knapptext", "url": "#om-oss"}
-      }
-    },
-    {
-      "type": "usp_row",
-      "data": {
-        "items": [
-          {"icon": "emoji", "label": "kort USP", "description": "en mening"},
-          {"icon": "emoji", "label": "kort USP", "description": "en mening"},
-          {"icon": "emoji", "label": "kort USP", "description": "en mening"}
-        ]
-      }
-    },
-    {
-      "type": "text_block",
-      "data": {
-        "heading": "Om [företaget]",
-        "body": "2-3 meningar om företaget",
-        "layout": "single"
-      }
-    },
-    {
-      "type": "feature_grid",
-      "data": {
-        "heading": "Vad vi erbjuder",
-        "intro": "kort intro",
-        "items": [
-          {"icon": "emoji", "title": "tjänst/produkt", "description": "kort beskrivning"},
-          {"icon": "emoji", "title": "tjänst/produkt", "description": "kort beskrivning"},
-          {"icon": "emoji", "title": "tjänst/produkt", "description": "kort beskrivning"}
-        ]
-      }
-    },
-    {
-      "type": "faq",
-      "data": {
-        "heading": "Vanliga frågor",
-        "items": [
-          {"question": "relevant fråga", "answer": "tydligt svar"},
-          {"question": "relevant fråga", "answer": "tydligt svar"},
-          {"question": "relevant fråga", "answer": "tydligt svar"}
-        ]
-      }
-    },
-    {
-      "type": "cta_band",
-      "data": {
-        "heading": "Redo att komma igång?",
-        "body": "kort uppmaning",
-        "cta": {"label": "Kontakta oss", "url": "#kontakt", "style": "primary"},
-        "background": "dark"
-      }
-    }
-  ]
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/å/g, "a").replace(/ä/g, "a").replace(/ö/g, "o")
+    .replace(/[^a-z0-9]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 30);
 }
-
-Anpassa allt innehåll till företaget. Gör det professionellt, konkret och säljande på svenska.`;
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  if (!user) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
+  const { answers, siteId } = await req.json();
 
-  const { answers } = await req.json();
+  // Hämta profil
+  const { data: profile } = await supabase.from("profiles").select("full_name, company_name").eq("id", user.id).maybeSingle();
 
   const userContext = `
-Företagsnamn och beskrivning: ${answers[0] ?? ""}
-Tjänster/produkter: ${answers[1] ?? ""}
-Målgrupp: ${answers[2] ?? ""}
-Unika fördelar: ${answers[3] ?? ""}
+Företagsnamn: ${profile?.company_name ?? answers[0] ?? ""}
+Vad företaget gör / tjänster: ${answers[0] ?? ""}
+Målgrupp: ${answers[1] ?? ""}
+Unika fördelar: ${answers[2] ?? ""}
+Erbjudande/garanti: ${answers[3] ?? ""}
 Primärfärg: ${answers[4] ?? "#0F1012"}
 `;
 
   const message = await client.messages.create({
     model: "claude-sonnet-4-20250514",
     max_tokens: 4000,
-    messages: [
-      {
-        role: "user",
-        content: `${GENERATE_PROMPT}\n\nFÖRETAGSINFORMATION:\n${userContext}`,
-      },
-    ],
+    messages: [{
+      role: "user",
+      content: `Generera en komplett hemsida-payload som JSON. Svara ENDAST med giltig JSON, inga backticks.
+
+Schema:
+{
+  "page": { "title": "string", "slug": "hem", "is_front_page": true, "template": "landing" },
+  "brand": { "name": "string", "primary_color": "#hex", "tone": "professional" },
+  "seo": { "meta_title": "string (max 60 tecken)", "meta_description": "string (max 155 tecken)", "focus_keyword": "string" },
+  "sections": [
+    { "type": "hero", "data": { "eyebrow": "string", "headline": "string (max 8 ord)", "subheadline": "string", "primary_cta": { "label": "string", "url": "#kontakt", "style": "primary" }, "secondary_cta": { "label": "string", "url": "#om" } } },
+    { "type": "usp_row", "data": { "items": [{ "icon": "emoji", "label": "string", "description": "string" }, { "icon": "emoji", "label": "string", "description": "string" }, { "icon": "emoji", "label": "string", "description": "string" }] } },
+    { "type": "text_block", "data": { "heading": "string", "body": "string", "layout": "single" } },
+    { "type": "feature_grid", "data": { "heading": "string", "intro": "string", "items": [{ "icon": "emoji", "title": "string", "description": "string" }, { "icon": "emoji", "title": "string", "description": "string" }, { "icon": "emoji", "title": "string", "description": "string" }] } },
+    { "type": "faq", "data": { "heading": "Vanliga frågor", "items": [{ "question": "string", "answer": "string" }, { "question": "string", "answer": "string" }, { "question": "string", "answer": "string" }] } },
+    { "type": "cta_band", "data": { "heading": "string", "body": "string", "cta": { "label": "string", "url": "#kontakt", "style": "primary" }, "background": "dark" } }
+  ]
+}
+
+FÖRETAGSINFO:
+${userContext}
+
+Skriv professionell säljande svenska. Anpassa allt till branschen.`,
+    }],
   });
 
   const content = message.content[0];
-  if (content.type !== "text") {
-    return NextResponse.json({ error: "generation_failed" }, { status: 500 });
-  }
+  if (content.type !== "text") return NextResponse.json({ error: "generation_failed" }, { status: 500 });
 
   let payload: Payload;
   try {
-    const clean = content.text.replace(/```json|```/g, "").trim();
-    payload = JSON.parse(clean);
+    payload = JSON.parse(content.text.replace(/```json|```/g, "").trim());
   } catch {
     return NextResponse.json({ error: "invalid_json" }, { status: 500 });
   }
 
-  const { data: site } = await supabase
-    .from("sites")
-    .select("wp_url, wp_api_key")
-    .eq("user_id", user.id)
-    .maybeSingle();
+  // Generera subdomän från företagsnamn
+  const companyName = profile?.company_name ?? payload.brand?.name ?? "min-sajt";
+  const baseSlug = slugify(companyName);
 
-  await supabase
-    .from("sites")
-    .update({
-      name: payload.brand?.name ?? "Min sajt",
+  // Kolla att subdomänet är unikt
+  let subdomain = baseSlug;
+  let counter = 0;
+  while (true) {
+    const { data: existing } = await supabase.from("sites").select("id").eq("subdomain", subdomain).maybeSingle();
+    if (!existing) break;
+    counter++;
+    subdomain = `${baseSlug}-${counter}`;
+  }
+
+  const wpUrl = `https://${subdomain}.aiwebb.se`;
+
+  // Uppdatera eller skapa site
+  let site;
+  if (siteId) {
+    const { data } = await supabase.from("sites").update({
+      name: payload.brand?.name ?? companyName,
       brand: payload.brand,
       seo: payload.seo,
       sections: payload.sections,
-    })
-    .eq("user_id", user.id);
-
-  if (site?.wp_url && site?.wp_api_key) {
-    await publishToWordPress(payload, {
-      baseUrl: site.wp_url,
-      apiKey: site.wp_api_key,
-    });
+    }).eq("id", siteId).eq("user_id", user.id).select().maybeSingle();
+    site = data;
+  } else {
+    const { data } = await supabase.from("sites").insert({
+      user_id: user.id,
+      name: payload.brand?.name ?? companyName,
+      subdomain,
+      wp_url: wpUrl,
+      wp_api_key: process.env.AIWEBB_WP_API_KEY ?? "",
+      brand: payload.brand,
+      seo: payload.seo,
+      sections: payload.sections,
+    }).select().maybeSingle();
+    site = data;
   }
 
-  return NextResponse.json({ success: true, payload });
+  // Publicera till WP om wp_url finns
+  if (site?.wp_url && site?.wp_api_key) {
+    await publishToWordPress(payload, { baseUrl: site.wp_url, apiKey: site.wp_api_key });
+  }
+
+  return NextResponse.json({ success: true, subdomain, wp_url: wpUrl });
 }

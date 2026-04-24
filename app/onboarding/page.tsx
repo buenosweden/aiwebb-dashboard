@@ -1,68 +1,45 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Send, Loader2, CheckCircle } from "lucide-react";
+import { Suspense } from "react";
 
-interface Message {
-  role: "user" | "assistant";
-  content: string;
-}
-
+interface Message { role: "user" | "assistant"; content: string; }
 type Phase = "chatting" | "generating" | "done" | "error";
 
 const QUICK_REPLIES: Record<number, string[]> = {
   0: [],
-  1: [
-    "Hantverkstjänster (bygg, el, VVS)",
-    "Restaurang eller café",
-    "Konsult eller rådgivning",
-    "Butik eller e-handel",
-    "Hälsa, skönhet eller träning",
-    "IT eller tech",
-  ],
-  2: [
-    "Privatpersoner i hela Sverige",
-    "Företag och organisationer",
-    "Lokala kunder i min stad",
-    "Både privat och företag",
-  ],
-  3: [
-    "Snabb leverans och tillgänglighet",
-    "Lång erfarenhet och expertis",
-    "Personlig service och omsorg",
-    "Bästa pris på marknaden",
-  ],
-  4: [
-    "#1E3A8A (mörkblå)",
-    "#166534 (mörkgrön)",
-    "#9A3412 (rostrött)",
-    "#1F2937 (antracit)",
-    "#7C3AED (lila)",
-    "#0F766E (teal)",
-  ],
+  1: ["Privatpersoner i hela Sverige", "Företag och organisationer", "Lokala kunder i min stad", "Både privat och företag"],
+  2: ["Snabb leverans och tillgänglighet", "Lång erfarenhet och expertis", "Personlig service och omsorg", "Bästa pris på marknaden"],
+  3: ["Fri frakt / fri leverans", "Nöjd-kund-garanti", "Öppet köp 30 dagar", "Gratis konsultation"],
+  4: ["#1E3A8A (mörkblå)", "#166534 (mörkgrön)", "#9A3412 (rostrött)", "#1F2937 (antracit)", "#7C3AED (lila)", "#0F766E (teal)"],
 };
 
-export default function OnboardingPage() {
+function OnboardingContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const siteId = searchParams.get("site");
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [phase, setPhase] = useState<Phase>("chatting");
   const [answers, setAnswers] = useState<string[]>([]);
   const [questionIndex, setQuestionIndex] = useState(0);
-  const [generatingText, setGeneratingText] = useState("Genererar din sajt...");
+  const [generatingText, setGeneratingText] = useState("Analyserar ditt företag...");
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const startedRef = useRef(false);
 
-  // Fix: useRef + startedRef säkerställer att AI-hälsning bara körs en gång
   useEffect(() => {
     if (startedRef.current) return;
     startedRef.current = true;
-    askAI([]);
+    // Liten delay så sidan hinner rendera innan vi anropar API
+    const timer = setTimeout(() => askAI([]), 300);
+    return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -78,20 +55,19 @@ export default function OnboardingPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages: history }),
       });
-
       if (!res.ok || !res.body) { setLoading(false); return; }
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let full = "";
 
-      setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
+      setMessages(prev => [...prev, { role: "assistant", content: "" }]);
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         full += decoder.decode(value);
-        setMessages((prev) => {
+        setMessages(prev => {
           const updated = [...prev];
           updated[updated.length - 1] = { role: "assistant", content: full };
           return updated;
@@ -102,28 +78,22 @@ export default function OnboardingPage() {
       setTimeout(() => inputRef.current?.focus(), 100);
 
       if (full.includes("ONBOARDING_COMPLETE")) {
-        setMessages((prev) => {
+        setMessages(prev => {
           const updated = [...prev];
-          updated[updated.length - 1] = {
-            role: "assistant",
-            content: full.replace("ONBOARDING_COMPLETE", "").trim(),
-          };
+          updated[updated.length - 1] = { role: "assistant", content: full.replace("ONBOARDING_COMPLETE", "").trim() };
           return updated;
         });
-        setTimeout(() => generateSite(answers), 1000);
+        setTimeout(() => generateSite(answers), 800);
       }
-    } catch {
-      setLoading(false);
-    }
+    } catch { setLoading(false); }
   }
 
   async function sendAnswer(text: string) {
     if (!text.trim() || loading || phase !== "chatting") return;
-    const userMessage: Message = { role: "user", content: text.trim() };
     const newAnswers = [...answers, text.trim()];
     setAnswers(newAnswers);
     setQuestionIndex(newAnswers.length);
-    const newMessages = [...messages, userMessage];
+    const newMessages = [...messages, { role: "user" as const, content: text.trim() }];
     setMessages(newMessages);
     setInput("");
     await askAI(newMessages);
@@ -131,52 +101,35 @@ export default function OnboardingPage() {
 
   async function generateSite(finalAnswers: string[]) {
     setPhase("generating");
-    const texts = [
-      "Analyserar ditt företag...",
-      "Skriver texter...",
-      "Skapar sektioner...",
-      "Optimerar för sökmotorer...",
-      "Publicerar din sajt...",
-    ];
+    const texts = ["Analyserar ditt företag...", "Skriver texter...", "Skapar sektioner...", "SEO-optimerar...", "Publicerar din sajt..."];
     let i = 0;
-    const interval = setInterval(() => {
-      if (i < texts.length) { setGeneratingText(texts[i]); i++; }
-    }, 1800);
+    const interval = setInterval(() => { if (i < texts.length) { setGeneratingText(texts[i]); i++; } }, 1800);
 
     try {
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ answers: finalAnswers }),
+        body: JSON.stringify({ answers: finalAnswers, siteId }),
       });
       clearInterval(interval);
       if (!res.ok) { setPhase("error"); return; }
       setPhase("done");
       setGeneratingText("Din sajt är klar! 🎉");
       setTimeout(() => router.push("/hantera"), 2000);
-    } catch {
-      clearInterval(interval);
-      setPhase("error");
-    }
+    } catch { clearInterval(interval); setPhase("error"); }
   }
-
-  const currentQuickReplies = QUICK_REPLIES[questionIndex] ?? [];
 
   if (phase === "generating" || phase === "done") {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center space-y-6 max-w-sm px-6">
           <div className="mx-auto h-16 w-16 rounded-full bg-secondary flex items-center justify-center">
-            {phase === "done" ? (
-              <CheckCircle className="h-8 w-8 text-green-500" />
-            ) : (
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            )}
+            {phase === "done" ? <CheckCircle className="h-8 w-8 text-green-500" /> : <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />}
           </div>
           <div>
             <h2 className="text-lg font-medium mb-2">{generatingText}</h2>
             <p className="text-sm text-muted-foreground">
-              {phase === "generating" ? "Vi bygger din sajt med AI. Det tar bara några sekunder." : "Skickar dig till dashboardet..."}
+              {phase === "generating" ? "Vi bygger din sajt med AI. Tar bara några sekunder." : "Skickar dig till dashboardet..."}
             </p>
           </div>
           {phase === "generating" && (
@@ -200,6 +153,8 @@ export default function OnboardingPage() {
     );
   }
 
+  const currentQuickReplies = QUICK_REPLIES[questionIndex] ?? [];
+
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <header className="border-b px-6 py-4 flex items-center gap-3">
@@ -208,7 +163,7 @@ export default function OnboardingPage() {
         </div>
         <span className="text-sm font-medium">Skapa din sajt</span>
         <div className="ml-auto flex gap-1">
-          {[1, 2, 3, 4, 5].map((n) => (
+          {[1,2,3,4,5].map(n => (
             <div key={n} className={`h-1.5 w-6 rounded-full transition-colors duration-300 ${n <= answers.length ? "bg-primary" : "bg-secondary"}`} />
           ))}
         </div>
@@ -225,9 +180,7 @@ export default function OnboardingPage() {
             <div className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${msg.role === "user" ? "bg-primary text-primary-foreground rounded-br-sm" : "bg-secondary text-foreground rounded-bl-sm"}`}>
               {msg.content || (
                 <span className="flex gap-1 items-center h-5">
-                  {[0, 150, 300].map((delay) => (
-                    <span key={delay} className="w-1.5 h-1.5 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: `${delay}ms` }} />
-                  ))}
+                  {[0,150,300].map(d => <span key={d} className="w-1.5 h-1.5 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: `${d}ms` }} />)}
                 </span>
               )}
             </div>
@@ -239,8 +192,8 @@ export default function OnboardingPage() {
       {!loading && currentQuickReplies.length > 0 && (
         <div className="px-4 pb-3 max-w-2xl mx-auto w-full">
           <div className="flex flex-wrap gap-2">
-            {currentQuickReplies.map((reply) => (
-              <button key={reply} onClick={() => sendAnswer(reply)} className="text-xs px-3 py-1.5 rounded-full border border-input bg-background hover:bg-secondary hover:border-foreground/30 transition-colors">
+            {currentQuickReplies.map(reply => (
+              <button key={reply} onClick={() => sendAnswer(reply)} className="text-xs px-3 py-1.5 rounded-full border border-input bg-background hover:bg-secondary transition-colors">
                 {reply}
               </button>
             ))}
@@ -253,8 +206,8 @@ export default function OnboardingPage() {
           <Input
             ref={inputRef}
             value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendAnswer(input)}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendAnswer(input)}
             placeholder={currentQuickReplies.length > 0 ? "Eller skriv ditt eget svar..." : "Skriv ditt svar..."}
             disabled={loading}
             className="flex-1"
@@ -265,5 +218,13 @@ export default function OnboardingPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function OnboardingPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>}>
+      <OnboardingContent />
+    </Suspense>
   );
 }

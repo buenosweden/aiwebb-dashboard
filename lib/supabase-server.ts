@@ -13,9 +13,7 @@ export async function createClient() {
         getAll() { return cookieStore.getAll(); },
         setAll(cookiesToSet: CookieToSet[]) {
           try {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
-            );
+            cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options));
           } catch {}
         },
       },

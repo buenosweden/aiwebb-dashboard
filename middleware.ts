@@ -14,24 +14,18 @@ export async function middleware(request: NextRequest) {
         setAll(cookiesToSet: CookieToSet[]) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
           response = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            response.cookies.set(name, value, options)
-          );
+          cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
         },
       },
     }
   );
   const { data: { user } } = await supabase.auth.getUser();
   const path = request.nextUrl.pathname;
-  if (!user && path.startsWith("/hantera")) {
-    return NextResponse.redirect(new URL("/login", request.url));
-  }
-  if (user && path.startsWith("/login")) {
-    return NextResponse.redirect(new URL("/hantera", request.url));
-  }
+  if (!user && path.startsWith("/hantera")) return NextResponse.redirect(new URL("/login", request.url));
+  if (user && (path === "/login" || path === "/signup")) return NextResponse.redirect(new URL("/hantera", request.url));
   return response;
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg)).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|ico)).*)"],
 };
