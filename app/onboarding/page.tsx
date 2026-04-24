@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Send, Loader2, CheckCircle } from "lucide-react";
 import { Suspense } from "react";
+import { createClient } from "@/lib/supabase-client";
 
 interface Message { role: "user" | "assistant"; content: string; }
 type Phase = "chatting" | "generating" | "done" | "error";
@@ -30,15 +31,25 @@ function OnboardingContent() {
   const [answers, setAnswers] = useState<string[]>([]);
   const [questionIndex, setQuestionIndex] = useState(0);
   const [generatingText, setGeneratingText] = useState("Analyserar ditt företag...");
+  const [profile, setProfile] = useState<{full_name?: string; company_name?: string}>({});
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const startedRef = useRef(false);
 
   useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      if (user) {
+        const { data } = await supabase.from("profiles").select("full_name, company_name").eq("id", user.id).maybeSingle();
+        if (data) setProfile(data);
+      }
+    });
+  }, []);
+
+  useEffect(() => {
     if (startedRef.current) return;
     startedRef.current = true;
-    // Liten delay så sidan hinner rendera innan vi anropar API
-    const timer = setTimeout(() => askAI([]), 300);
+    const timer = setTimeout(() => askAI([]), 400);
     return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -53,7 +64,7 @@ function OnboardingContent() {
       const res = await fetch("/api/onboarding", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: history }),
+        body: JSON.stringify({ messages: history, profile }),
       });
       if (!res.ok || !res.body) { setLoading(false); return; }
 
@@ -104,7 +115,6 @@ function OnboardingContent() {
     const texts = ["Analyserar ditt företag...", "Skriver texter...", "Skapar sektioner...", "SEO-optimerar...", "Publicerar din sajt..."];
     let i = 0;
     const interval = setInterval(() => { if (i < texts.length) { setGeneratingText(texts[i]); i++; } }, 1800);
-
     try {
       const res = await fetch("/api/generate", {
         method: "POST",
