@@ -12,7 +12,13 @@ export const metadata = { title: "Varumärke" };
 export default async function VarumarkePage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  const { data: site } = await supabase.from("sites").select("brand, wp_url").eq("user_id", user!.id).maybeSingle();
+  const { data: site } = await supabase
+    .from("sites")
+    .select("brand, wp_url")
+    .eq("user_id", user!.id)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
   const brand = (site?.brand ?? {}) as Record<string, string>;
 
   return (
