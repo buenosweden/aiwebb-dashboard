@@ -8,14 +8,16 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const { siteId } = await req.json();
+  let siteId: string | null = null;
+  try {
+    const body = await req.json();
+    siteId = body?.siteId ?? null;
+  } catch {}
 
-  const { data: site } = await supabase
-    .from("sites")
-    .select("*")
-    .eq("id", siteId)
-    .eq("user_id", user.id)
-    .maybeSingle();
+  const query = supabase.from("sites").select("*").eq("user_id", user.id);
+  const { data: site } = siteId
+    ? await query.eq("id", siteId).maybeSingle()
+    : await query.order("created_at", { ascending: false }).limit(1).maybeSingle();
 
   if (!site) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
