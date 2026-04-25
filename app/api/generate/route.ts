@@ -9,9 +9,7 @@ export const maxDuration = 60;
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/\u00e5/g, "a").replace(/\u00e4/g, "a").replace(/\u00f6/g, "o")
+  return text.toLowerCase()
     .replace(/[^a-z0-9]/g, "-")
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "")
@@ -32,71 +30,88 @@ export async function POST(req: NextRequest) {
     .maybeSingle();
 
   const companyName = profile?.company_name ?? answers[0] ?? "";
-  const userContext = [
-    "Foeretagsnamn: " + companyName,
-    "Tjänster: " + (answers[0] ?? ""),
-    "Målgrupp: " + (answers[1] ?? ""),
-    "Fördelar: " + (answers[2] ?? ""),
-    "Erbjudande: " + (answers[3] ?? ""),
-    "Primärfärg: " + (answers[4] ?? "#0F1012"),
-  ].join("\n");
 
   const message = await client.messages.create({
     model: "claude-sonnet-4-5",
     max_tokens: 4000,
     messages: [{
       role: "user",
-      content: `Generera en komplett hemsida-payload som JSON. Svara ENDAST m
-cat > ~/Downloads/aiwebb-dashboard/app/onboarding/generating.tsx << 'EOF'
-"use client";
+      content: `Generera en komplett hemsida-payload som JSON. Svara ENDAST med giltig JSON, inga backticks.
 
-import { useEffect, useState } from "react";
+Schema:
+{
+  "page": { "title": "string", "slug": "hem", "is_front_page": true, "template": "landing" },
+  "brand": { "name": "string", "primary_color": "#hex", "tone": "professional" },
+  "seo": { "meta_title": "string", "meta_description": "string", "focus_keyword": "string" },
+  "sections": [
+    { "type": "hero", "data": { "eyebrow": "string", "headline": "string", "subheadline": "string", "primary_cta": { "label": "string", "url": "#kontakt" }, "secondary_cta": { "label": "string", "url": "#om" } } },
+    { "type": "usp_row", "data": { "items": [{ "icon": "emoji", "label": "string", "description": "string" }, { "icon": "emoji", "label": "string", "description": "string" }, { "icon": "emoji", "label": "string", "description": "string" }] } },
+    { "type": "text_block", "data": { "heading": "string", "body": "string", "layout": "single" } },
+    { "type": "feature_grid", "data": { "heading": "string", "intro": "string", "items": [{ "icon": "emoji", "title": "string", "description": "string" }, { "icon": "emoji", "title": "string", "description": "string" }, { "icon": "emoji", "title": "string", "description": "string" }] } },
+    { "type": "faq", "data": { "heading": "Vanliga fragor", "items": [{ "question": "string", "answer": "string" }, { "question": "string", "answer": "string" }, { "question": "string", "answer": "string" }] } },
+    { "type": "cta_band", "data": { "heading": "string", "body": "string", "cta": { "label": "string", "url": "#kontakt" }, "background": "dark" } }
+  ]
+}
 
-const STEPS = [
-  { icon: "🔍", label: "Analyserar ditt foretag...", color: "text-blue-500" },
-  { icon: "✍️", label: "Skriver texter...", color: "text-purple-500" },
-  { icon: "🏗️", label: "Skapar sektioner...", color: "text-orange-500" },
-  { icon: "🎨", label: "Applicerar design...", color: "text-pink-500" },
-  { icon: "🔎", label: "SEO-optimerar...", color: "text-green-500" },
-  { icon: "🚀", label: "Publicerar din sajt...", color: "text-indigo-500" },
-];
+Foretag: ${companyName}
+Tjanster: ${answers[0] ?? ""}
+Malgrupp: ${answers[1] ?? ""}
+Fordelar: ${answers[2] ?? ""}
+Erbjudande: ${answers[3] ?? ""}
+Rimarfarg: ${answers[4] ?? "#0F1012"}
 
-export function GeneratingScreen() {
-  const [step, setStep] = useState(0);
-  const [visible, setVisible] = useState(true);
+Skriv professionell saljande svenska.`,
+    }],
+  });
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setVisible(false);
-      setTimeout(() => {
-        setStep(prev => (prev + 1) % STEPS.length);
-        setVisible(true);
-      }, 300);
-    }, 1800);
-    return () => clearInterval(interval);
-  }, []);
+  const content = message.content[0];
+  if (content.type !== "text") return NextResponse.json({ error: "generation_failed" }, { status: 500 });
 
-  const current = STEPS[step];
+  let payload: Payload;
+  try {
+    payload = JSON.parse(content.text.replace(/```json|```/g, "").trim());
+  } catch {
+    return NextResponse.json({ error: "invalid_json" }, { status: 500 });
+  }
 
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
-      <div className="text-center space-y-8 max-w-sm px-6">
-        <div className={`mx-auto h-20 w-20 rounded-2xl bg-secondary flex items-center justify-center transition-all duration-300 ${visible ? "opacity-100 scale-100" : "opacity-0 scale-90"}`}>
-          <span className="text-4xl">{current.icon}</span>
-        </div>
-        <div className={`transition-all duration-300 ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2"}`}>
-          <h2 className={`text-lg font-medium mb-2 ${current.color}`}>{current.label}</h2>
-          <p className="text-sm text-muted-foreground">Vi bygger din sajt med AI. Tar bara nagra sekunder.</p>
-        </div>
-        <div className="w-full bg-secondary rounded-full h-1.5 overflow-hidden">
-          <div className="h-full bg-primary rounded-full transition-all duration-500" style={{ width: ((step + 1) / STEPS.length * 100) + "%" }} />
-        </div>
-        <div className="flex justify-center gap-1.5">
-          {STEPS.map((_, i) => (
-            <div key={i} className={`h-1.5 w-1.5 rounded-full transition-all duration-300 ${i <= step ? "bg-primary" : "bg-secondary"}`} />
-          ))}
-        </div>
-      </div>
-    </div>
-  );
+  const baseSlug = slugify(companyName || payload.brand?.name || "min-sajt");
+  let subdomain = baseSlug;
+  let counter = 0;
+  while (true) {
+    const { data: existing } = await supabase.from("sites").select("id").eq("subdomain", subdomain).maybeSingle();
+    if (!existing) break;
+    counter++;
+    subdomain = baseSlug + "-" + counter;
+  }
+
+  const wpUrl = "https://" + subdomain + ".aiwebb.se";
+
+  if (siteId) {
+    await supabase.from("sites").update({
+      name: payload.brand?.name ?? companyName,
+      brand: payload.brand,
+      seo: payload.seo,
+      sections: payload.sections,
+    }).eq("id", siteId).eq("user_id", user.id);
+  } else {
+    await supabase.from("sites").insert({
+      user_id: user.id,
+      name: payload.brand?.name ?? companyName,
+      subdomain,
+      wp_url: wpUrl,
+      wp_api_key: process.env.AIWEBB_WP_API_KEY ?? "",
+      brand: payload.brand,
+      seo: payload.seo,
+      sections: payload.sections,
+    });
+  }
+
+  if (process.env.AIWEBB_WP_BASE_URL && process.env.AIWEBB_WP_API_KEY) {
+    await publishToWordPress(payload, {
+      baseUrl: process.env.AIWEBB_WP_BASE_URL,
+      apiKey: process.env.AIWEBB_WP_API_KEY,
+    }).catch(console.error);
+  }
+
+  return NextResponse.json({ success: true, subdomain, wp_url: wpUrl });
 }

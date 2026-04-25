@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 const STEPS = [
-  { icon: "🔍", label: "Analyserar ditt företag...", color: "text-blue-500" },
+  { icon: "🔍", label: "Analyserar ditt foretag...", color: "text-blue-500" },
   { icon: "✍️", label: "Skriver texter...", color: "text-purple-500" },
   { icon: "🏗️", label: "Skapar sektioner...", color: "text-orange-500" },
   { icon: "🎨", label: "Applicerar design...", color: "text-pink-500" },
@@ -27,38 +27,26 @@ export function GeneratingScreen() {
   }, []);
 
   const current = STEPS[step];
+  const iconClass = "mx-auto h-20 w-20 rounded-2xl bg-secondary flex items-center justify-center transition-all duration-300 " + (visible ? "opacity-100 scale-100" : "opacity-0 scale-90");
+  const textClass = "transition-all duration-300 " + (visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2");
+  const progress = ((step + 1) / STEPS.length * 100) + "%";
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
       <div className="text-center space-y-8 max-w-sm px-6">
-        <div
-          className={`mx-auto h-20 w-20 rounded-2xl bg-secondary flex items-center justify-center transition-all duration-300 ${visible ? "opacity-100 scale-100" : "opacity-0 scale-90"}`}
-        >
+        <div className={iconClass}>
           <span className="text-4xl">{current.icon}</span>
         </div>
-
-        <div className={`transition-all duration-300 ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2"}`}>
-          <h2 className={`text-lg font-medium mb-2 ${current.color}`}>
-            {current.label}
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            Vi bygger din sajt med AI. Tar bara några sekunder.
-          </p>
+        <div className={textClass}>
+          <h2 className={"text-lg font-medium mb-2 " + current.color}>{current.label}</h2>
+          <p className="text-sm text-muted-foreground">Vi bygger din sajt med AI. Tar bara nagra sekunder.</p>
         </div>
-
         <div className="w-full bg-secondary rounded-full h-1.5 overflow-hidden">
-          <div
-            className="h-full bg-primary rounded-full transition-all duration-1800 ease-linear"
-            style={{ width: `${((step + 1) / STEPS.length) * 100}%` }}
-          />
+          <div className="h-full bg-primary rounded-full transition-all duration-500" style={{ width: progress }} />
         </div>
-
         <div className="flex justify-center gap-1.5">
           {STEPS.map((_, i) => (
-            <div
-              key={i}
-              className={`h-1.5 w-1.5 rounded-full transition-all duration-300 ${i <= step ? "bg-primary" : "bg-secondary"}`}
-            />
+            <div key={i} className={"h-1.5 w-1.5 rounded-full transition-all duration-300 " + (i <= step ? "bg-primary" : "bg-secondary")} />
           ))}
         </div>
       </div>
