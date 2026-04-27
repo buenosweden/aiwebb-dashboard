@@ -1,7 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
-import { publishToWordPress } from "@/lib/wordpress";
 import type { Payload } from "@/lib/payload";
 
 export const maxDuration = 60;
@@ -12,19 +11,6 @@ function generateSubdomain(text: string): string {
   const prefix = text.toLowerCase().replace(/[^a-z]/g, "").slice(0, 2) || "ai";
   const num = Math.floor(1000 + Math.random() * 9000);
   return prefix + "-" + num;
-}
-
-async function createWPSite(subdomain: string, siteName: string, apiKey: string): Promise<void> {
-  const networkApiUrl = process.env.AIWEBB_WP_NETWORK_URL;
-  const networkApiKey = process.env.AIWEBB_WP_NETWORK_KEY;
-  if (!networkApiUrl || !networkApiKey) return;
-  try {
-    await fetch(`${networkApiUrl}/wp-json/aiwebb-network/v1/create-site`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${networkApiKey}` },
-      body: JSON.stringify({ subdomain, site_name: siteName, api_key: apiKey }),
-    });
-  } catch (err) { console.error("WP network API error:", err); }
 }
 
 export async function POST(req: NextRequest) {
@@ -45,7 +31,7 @@ export async function POST(req: NextRequest) {
   const hexMatch = colorAnswer.match(/#[0-9a-fA-F]{6}/);
   const primaryColor = hexMatch ? hexMatch[0] : "#0F1012";
 
-  // Steg 1: Generera BARA startsidan med kortare prompt
+  // Generera startsidan med AI
   const message = await client.messages.create({
     model: "claude-sonnet-4-5",
     max_tokens: 2000,
@@ -103,7 +89,7 @@ Skriv professionell säljande svenska.`,
   const wpUrl = "https://" + subdomain + ".aiwebb.se";
   const wpApiKey = process.env.AIWEBB_WP_API_KEY ?? "testkey_tennisgrus_abc123xyz789";
 
-  // Steg 2: Spara i Supabase
+  // Spara i Supabase — ingen WP-publicering här, det sker via Publicera-knappen
   if (siteId) {
     await supabase.from("sites").update({
       name: homePage.brand?.name ?? companyName,
@@ -123,60 +109,6 @@ Skriv professionell säljande svenska.`,
       sections: homePage.sections,
     });
   }
-
-  // Steg 3: Returnera direkt till klienten — WP-publicering sker asynkront
-  // Vi använder waitUntil-mönster: svara snabbt, fortsätt i bakgrunden
-  const publishAll = async () => {
-    // Skapa WP-subsajt
-    await createWPSite(subdomain, homePage.brand?.name ?? companyName, wpApiKey);
-
-    // Publicera startsidan
-    await publishToWordPress(homePage, { baseUrl: wpUrl, apiKey: wpApiKey }).catch(console.error);
-
-    // Generera och publicera undersidor
-    const subPageTypes = [
-      { slug: "om-oss", title: "Om oss", sections: "hero, image_text (med checklist 6 punkter), stats (3-4 nyckeltal), cta_band" },
-      { slug: "tjanster", title: "Tjänster", sections: "hero, feature_grid (detaljerade tjänster med nummer), cta_band" },
-      { slug: "kontakt", title: "Kontakt", sections: "contact" },
-    ];
-
-    for (const sp of subPageTypes) {
-      try {
-        const spMessage = await client.messages.create({
-          model: "claude-sonnet-4-5",
-          max_tokens: 1500,
-          messages: [{
-            role: "user",
-            content: `Generera sidan "${sp.title}" (slug: "${sp.slug}") som JSON. Svara ENDAST med giltig JSON.
-
-{
-  "brand": { "name": "${homePage.brand?.name ?? companyName}", "primary_color": "${primaryColor}", "tone": "professional" },
-  "page": { "title": "${sp.title}", "slug": "${sp.slug}", "is_front_page": false, "template": "page" },
-  "seo": { "meta_title": "string", "meta_description": "string", "focus_keyword": "string" },
-  "sections": [ /* ${sp.sections} */ ]
-}
-
-Tillgängliga sektioner: hero, usp_row, feature_grid, image_text, stats, testimonial, faq, cta_band, contact
-Företag: ${homePage.brand?.name ?? companyName}
-Tjänster: ${answers[0] ?? ""}
-Primärfärg: ${primaryColor}
-Skriv professionell säljande svenska.`,
-          }],
-        });
-        const spContent = spMessage.content[0];
-        if (spContent.type === "text") {
-          const spPage = JSON.parse(spContent.text.replace(/```json|```/g, "").trim()) as Payload;
-          if (spPage.brand) spPage.brand.primary_color = primaryColor;
-          await publishToWordPress(spPage, { baseUrl: wpUrl, apiKey: wpApiKey }).catch(console.error);
-        }
-      } catch (err) {
-        console.error(`Failed to generate ${sp.slug}:`, err);
-      }
-    }
-  };
-
-  // Kör asynkront utan att blockera svaret
-  publishAll().catch(console.error);
 
   return NextResponse.json({ success: true, subdomain, wp_url: wpUrl });
 }
