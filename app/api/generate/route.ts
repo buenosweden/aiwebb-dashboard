@@ -8,13 +8,10 @@ export const maxDuration = 60;
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-function slugify(text: string): string {
-  return text.toLowerCase()
-    .replace(/[åä]/g, "a").replace(/ö/g, "o")
-    .replace(/[^a-z0-9]/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 30);
+function generateSubdomain(text: string): string {
+  const prefix = text.toLowerCase().replace(/[^a-z]/g, "").slice(0, 2) || "ai";
+  const num = Math.floor(1000 + Math.random() * 9000);
+  return prefix + "-" + num;
 }
 
 async function createWPSite(subdomain: string, siteName: string, apiKey: string): Promise<boolean> {
@@ -110,7 +107,7 @@ Skriv professionell saljande svenska.`,
   }
 
   // Generera unik subdomän
-  const baseSlug = slugify(companyName || payload.brand?.name || "min-sajt");
+  const baseSlug = generateSubdomain(companyName || payload.brand?.name || "min-sajt");
   let subdomain = baseSlug;
   let counter = 0;
   while (true) {
