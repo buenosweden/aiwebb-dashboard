@@ -90,7 +90,7 @@ Tjanster: ${answers[0] ?? ""}
 Malgrupp: ${answers[1] ?? ""}
 Fordelar: ${answers[2] ?? ""}
 Erbjudande: ${answers[3] ?? ""}
-Farg: ${answers[4] ?? "#0F1012"}
+Farg: ${(answers[4] ?? "").match(/#[0-9a-fA-F]{6}/) ? (answers[4]).match(/#[0-9a-fA-F]{6}/)[0] : "#0F1012"}
 
 Skriv professionell saljande svenska.`,
     }],
