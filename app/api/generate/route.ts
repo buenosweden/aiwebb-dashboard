@@ -106,6 +106,13 @@ Skriv professionell saljande svenska.`,
     return NextResponse.json({ error: "invalid_json" }, { status: 500 });
   }
 
+  // Override primärfärg med användarens val
+  const colorAnswer = answers[4] ?? "";
+  const hexMatch = colorAnswer.match(/#[0-9a-fA-F]{6}/);
+  if (hexMatch && payload.brand) {
+    payload.brand.primary_color = hexMatch[0];
+  }
+
   // Generera unik subdomän
   const baseSlug = generateSubdomain(companyName || payload.brand?.name || "min-sajt");
   let subdomain = baseSlug;
