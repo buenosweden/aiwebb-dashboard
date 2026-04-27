@@ -106,6 +106,7 @@ Skriv professionell saljande svenska.`,
     return NextResponse.json({ error: "invalid_json" }, { status: 500 });
   }
 
+  console.log("ANSWERS:", JSON.stringify(answers));
   // Override primärfärg med användarens val
   const colorAnswer = answers[4] ?? "";
   const hexMatch = colorAnswer.match(/#[0-9a-fA-F]{6}/);
