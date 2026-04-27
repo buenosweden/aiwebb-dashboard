@@ -12,10 +12,16 @@ export function DeleteSiteButton({ siteId, siteName }: { siteId: string; siteNam
   async function handleDelete() {
     setLoading(true);
     try {
-      await fetch("/api/sites/" + siteId, { method: "DELETE" });
-      router.refresh();
+      const res = await fetch("/api/sites/" + siteId, { method: "DELETE" });
+      if (res.ok) {
+        window.location.reload();
+      } else {
+        setLoading(false);
+        setConfirming(false);
+      }
     } catch {
       setLoading(false);
+      setConfirming(false);
     }
   }
 

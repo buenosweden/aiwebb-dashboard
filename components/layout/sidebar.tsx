@@ -10,6 +10,7 @@ const sections = [
     title: "Innehåll",
     items: [
       { label: "Startsida", href: "/hantera", icon: LayoutGrid },
+      { label: "Mina sajter", href: "/hantera/sajter", icon: Globe },
       { label: "Sektioner", href: "/hantera/sektioner", icon: FileText },
       { label: "Blogg", href: "/hantera/blogg", icon: FileText },
     ],
