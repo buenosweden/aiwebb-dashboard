@@ -12,13 +12,45 @@ import { GeneratingScreen } from "./generating";
 interface Message { role: "user" | "assistant"; content: string; }
 type Phase = "chatting" | "generating" | "done" | "error";
 
+const COLOR_OPTIONS = [
+  { hex: "#1E3A8A", name: "Mörkblå" },
+  { hex: "#166534", name: "Mörkgrön" },
+  { hex: "#9A3412", name: "Tegelbrun" },
+  { hex: "#1F2937", name: "Antracit" },
+  { hex: "#7C3AED", name: "Lila" },
+  { hex: "#0F766E", name: "Petrol" },
+];
+
 const QUICK_REPLIES: Record<number, string[]> = {
   0: [],
-  1: ["Privatpersoner i hela Sverige", "Foretag och organisationer", "Lokala kunder i min stad", "Bade privat och foretag"],
-  2: ["Snabb leverans och tillganglighet", "Lang erfarenhet och expertis", "Personlig service och omsorg", "Basta pris pa marknaden"],
-  3: ["Fri frakt", "Nojd-kund-garanti", "Oppet kop 30 dagar", "Gratis konsultation"],
-  4: ["#1E3A8A", "#166534", "#9A3412", "#1F2937", "#7C3AED", "#0F766E"],
+  1: ["Privatpersoner i hela Sverige", "Företag och organisationer", "Lokala kunder i min stad", "Både privat och företag"],
+  2: ["Snabb leverans och tillgänglighet", "Lång erfarenhet och expertis", "Personlig service och omsorg", "Bästa pris på marknaden"],
+  3: ["Fri frakt", "Nöjd-kund-garanti", "Öppet köp 30 dagar", "Gratis konsultation"],
+  4: [], // Färger hanteras separat med ColorPicker
 };
+
+function ColorPicker({ onSelect }: { onSelect: (hex: string) => void }) {
+  return (
+    <div className="px-4 pb-3 max-w-2xl mx-auto w-full">
+      <p className="text-xs text-muted-foreground mb-2">Välj en primärfärg för din sajt:</p>
+      <div className="flex flex-wrap gap-3">
+        {COLOR_OPTIONS.map(({ hex, name }) => (
+          <button
+            key={hex}
+            onClick={() => onSelect(hex)}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-input bg-background hover:bg-secondary transition-colors text-xs"
+          >
+            <span
+              className="w-4 h-4 rounded-full flex-shrink-0 border border-black/10"
+              style={{ backgroundColor: hex }}
+            />
+            {name}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function OnboardingContent() {
   const router = useRouter();
@@ -60,7 +92,7 @@ function OnboardingContent() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  async function askAI(history: Message[], currentProfile: {full_name?: string; company_name?: string}) {
+  async function askAI(history: Message[], currentProfile: {full_name?: string; company_name?: string}, currentAnswers: string[] = answers) {
     setLoading(true);
     try {
       const payload = history.length === 0
@@ -100,7 +132,7 @@ function OnboardingContent() {
           updated[updated.length - 1] = { role: "assistant", content: full.replace("ONBOARDING_COMPLETE", "").trim() };
           return updated;
         });
-        setTimeout(() => generateSite(answers), 800);
+        setTimeout(() => generateSite(currentAnswers), 800);
       }
     } catch (err) {
       console.error(err);
@@ -116,7 +148,7 @@ function OnboardingContent() {
     const newMessages = [...messages, { role: "user" as const, content: text.trim() }];
     setMessages(newMessages);
     setInput("");
-    await askAI(newMessages, profile ?? {});
+    await askAI(newMessages, profile ?? {}, newAnswers);
   }
 
   async function generateSite(finalAnswers: string[]) {
@@ -141,8 +173,8 @@ function OnboardingContent() {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center space-y-4">
-          <p className="text-sm text-muted-foreground">Nagot gick fel. Forsok igen.</p>
-          <Button onClick={() => router.push("/onboarding")}>Borja om</Button>
+          <p className="text-sm text-muted-foreground">Något gick fel. Försök igen.</p>
+          <Button onClick={() => router.push("/onboarding")}>Börja om</Button>
         </div>
       </div>
     );
@@ -157,6 +189,7 @@ function OnboardingContent() {
   }
 
   const currentQuickReplies = QUICK_REPLIES[questionIndex] ?? [];
+  const showColorPicker = questionIndex === 4 && !loading;
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -204,6 +237,10 @@ function OnboardingContent() {
         </div>
       )}
 
+      {showColorPicker && (
+        <ColorPicker onSelect={(hex) => sendAnswer(hex)} />
+      )}
+
       <div className="border-t px-4 py-4">
         <div className="max-w-2xl mx-auto flex gap-2">
           <Input
@@ -211,7 +248,7 @@ function OnboardingContent() {
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendAnswer(input)}
-            placeholder={currentQuickReplies.length > 0 ? "Eller skriv ditt eget svar..." : "Skriv ditt svar..."}
+            placeholder={showColorPicker ? "Eller skriv en färg, t.ex. mörkblå..." : currentQuickReplies.length > 0 ? "Eller skriv ditt eget svar..." : "Skriv ditt svar..."}
             disabled={loading}
             className="flex-1"
           />
