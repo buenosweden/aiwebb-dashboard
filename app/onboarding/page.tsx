@@ -17,7 +17,7 @@ const QUICK_REPLIES: Record<number, string[]> = {
   1: ["Privatpersoner i hela Sverige", "Foretag och organisationer", "Lokala kunder i min stad", "Bade privat och foretag"],
   2: ["Snabb leverans och tillganglighet", "Lang erfarenhet och expertis", "Personlig service och omsorg", "Basta pris pa marknaden"],
   3: ["Fri frakt", "Nojd-kund-garanti", "Oppet kop 30 dagar", "Gratis konsultation"],
-  4: [{ label: "Mörkblå", value: "#1E3A8A" }, { label: "Mörkgrön", value: "#166534" }, { label: "Rostrött", value: "#9A3412" }, { label: "Antracit", value: "#1F2937" }, { label: "Lila", value: "#7C3AED" }, { label: "Teal", value: "#0F766E" }],
+  4: ["#1E3A8A", "#166534", "#9A3412", "#1F2937", "#7C3AED", "#0F766E"],
 };
 
 function OnboardingContent() {
