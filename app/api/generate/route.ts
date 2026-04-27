@@ -14,87 +14,17 @@ function generateSubdomain(text: string): string {
   return prefix + "-" + num;
 }
 
-async function createWPSite(subdomain: string, siteName: string, apiKey: string): Promise<boolean> {
+async function createWPSite(subdomain: string, siteName: string, apiKey: string): Promise<void> {
   const networkApiUrl = process.env.AIWEBB_WP_NETWORK_URL;
   const networkApiKey = process.env.AIWEBB_WP_NETWORK_KEY;
-  if (!networkApiUrl || !networkApiKey) return false;
+  if (!networkApiUrl || !networkApiKey) return;
   try {
-    const res = await fetch(`${networkApiUrl}/wp-json/aiwebb-network/v1/create-site`, {
+    await fetch(`${networkApiUrl}/wp-json/aiwebb-network/v1/create-site`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${networkApiKey}` },
       body: JSON.stringify({ subdomain, site_name: siteName, api_key: apiKey }),
     });
-    return res.ok;
-  } catch { return false; }
-}
-
-// Generera EN sida åt gången för att hålla oss under 60s timeout
-async function generatePage(
-  pageType: string,
-  companyName: string,
-  answers: string[],
-  primaryColor: string,
-  brand: { name: string; primary_color: string; tone: string } | null
-): Promise<Payload | null> {
-  const brandInfo = brand
-    ? `Företagsnamn: ${brand.name}, Primärfärg: ${brand.primary_color}`
-    : `Företag: ${companyName}`;
-
-  const pagePrompts: Record<string, string> = {
-    hem: `Generera startsidan (slug: "hem", is_front_page: true) med sektionerna: hero, usp_row, feature_grid, testimonial, faq, cta_band.`,
-    "om-oss": `Generera Om oss-sidan (slug: "om-oss") med sektionerna: hero, image_text (med checklist), stats, cta_band.`,
-    tjanster: `Generera Tjänster-sidan (slug: "tjanster") med sektionerna: hero, feature_grid (detaljerade tjänster), image_text, cta_band.`,
-    priser: `Generera Priser-sidan (slug: "priser") med sektionerna: hero, feature_grid (prisplaner/paket), faq, cta_band.`,
-    kontakt: `Generera Kontakt-sidan (slug: "kontakt") med sektionen: contact.`,
-  };
-
-  const prompt = pagePrompts[pageType] || pagePrompts["hem"];
-
-  const message = await client.messages.create({
-    model: "claude-sonnet-4-5",
-    max_tokens: 2500,
-    messages: [{
-      role: "user",
-      content: `Generera en sida som JSON. Svara ENDAST med giltig JSON, inga backticks.
-
-${prompt}
-
-Schema:
-{
-  "brand": { "name": "string", "primary_color": "#hex", "tone": "professional" },
-  "page": { "title": "string", "slug": "string", "is_front_page": false, "template": "page" },
-  "seo": { "meta_title": "string (max 60 tecken)", "meta_description": "string (max 155 tecken)", "focus_keyword": "string" },
-  "sections": [ ...relevanta sektioner... ]
-}
-
-Tillgängliga sektionstyper och deras data-struktur:
-- hero: { eyebrow, headline, subheadline, primary_cta: {label, url}, secondary_cta: {label, url} }
-- usp_row: { items: [{icon, label, description}] }
-- feature_grid: { heading, intro, items: [{icon, title, description}] }
-- image_text: { subtitle, heading, body, cta: {label, url}, checklist: [string] }
-- stats: { items: [{value, label, description}] }
-- testimonial: { quote, name, title }
-- faq: { heading, subtitle, body, cta: {label, url}, items: [{question, answer}] }
-- cta_band: { heading, body, cta: {label, url}, background: "dark" }
-- contact: { subtitle, heading, body, phone, form_title, cta_label }
-
-${brandInfo}
-Tjänster: ${answers[0] ?? ""}
-Målgrupp: ${answers[1] ?? ""}
-Fördelar: ${answers[2] ?? ""}
-Erbjudande: ${answers[3] ?? ""}
-VIKTIGT - Primärfärg (MÅSTE användas exakt i brand.primary_color): ${primaryColor}
-
-Skriv professionell säljande svenska.`,
-    }],
-  });
-
-  const content = message.content[0];
-  if (content.type !== "text") return null;
-
-  try {
-    return JSON.parse(content.text.replace(/```json|```/g, "").trim()) as Payload;
-  } catch { return null; }
+  } catch (err) { console.error("WP network API error:", err); }
 }
 
 export async function POST(req: NextRequest) {
@@ -115,8 +45,52 @@ export async function POST(req: NextRequest) {
   const hexMatch = colorAnswer.match(/#[0-9a-fA-F]{6}/);
   const primaryColor = hexMatch ? hexMatch[0] : "#0F1012";
 
+  // Steg 1: Generera BARA startsidan med kortare prompt
+  const message = await client.messages.create({
+    model: "claude-sonnet-4-5",
+    max_tokens: 2000,
+    messages: [{
+      role: "user",
+      content: `Generera startsidan som JSON. Svara ENDAST med giltig JSON, inga backticks.
+
+{
+  "brand": { "name": "string", "primary_color": "${primaryColor}", "tone": "professional" },
+  "page": { "title": "string", "slug": "hem", "is_front_page": true, "template": "landing" },
+  "seo": { "meta_title": "string (max 60 tecken)", "meta_description": "string (max 155 tecken)", "focus_keyword": "string" },
+  "sections": [
+    { "type": "hero", "data": { "eyebrow": "string", "headline": "string", "subheadline": "string", "primary_cta": { "label": "string", "url": "#kontakt" }, "secondary_cta": { "label": "string", "url": "#om" } } },
+    { "type": "usp_row", "data": { "items": [{ "icon": "emoji", "label": "string", "description": "string" }, { "icon": "emoji", "label": "string", "description": "string" }, { "icon": "emoji", "label": "string", "description": "string" }] } },
+    { "type": "feature_grid", "data": { "heading": "string", "intro": "string", "items": [{ "icon": "emoji", "title": "string", "description": "string" }, { "icon": "emoji", "title": "string", "description": "string" }, { "icon": "emoji", "title": "string", "description": "string" }] } },
+    { "type": "cta_band", "data": { "heading": "string", "body": "string", "cta": { "label": "string", "url": "#kontakt" }, "background": "dark" } }
+  ]
+}
+
+Företag: ${companyName}
+Tjänster: ${answers[0] ?? ""}
+Målgrupp: ${answers[1] ?? ""}
+Fördelar: ${answers[2] ?? ""}
+Erbjudande: ${answers[3] ?? ""}
+Primärfärg: ${primaryColor}
+
+Skriv professionell säljande svenska.`,
+    }],
+  });
+
+  const content = message.content[0];
+  if (content.type !== "text") return NextResponse.json({ error: "generation_failed" }, { status: 500 });
+
+  let homePage: Payload;
+  try {
+    homePage = JSON.parse(content.text.replace(/```json|```/g, "").trim());
+  } catch {
+    return NextResponse.json({ error: "invalid_json" }, { status: 500 });
+  }
+
+  // Override primärfärg
+  if (homePage.brand) homePage.brand.primary_color = primaryColor;
+
   // Generera subdomän
-  const baseSlug = generateSubdomain(companyName);
+  const baseSlug = generateSubdomain(companyName || homePage.brand?.name || "ai");
   let subdomain = baseSlug;
   let counter = 0;
   while (true) {
@@ -129,25 +103,16 @@ export async function POST(req: NextRequest) {
   const wpUrl = "https://" + subdomain + ".aiwebb.se";
   const wpApiKey = process.env.AIWEBB_WP_API_KEY ?? "testkey_tennisgrus_abc123xyz789";
 
-  // Generera startsidan först (mest kritisk)
-  const homePage = await generatePage("hem", companyName, answers, primaryColor, null);
-  if (!homePage) return NextResponse.json({ error: "generation_failed" }, { status: 500 });
-
-  // Override primärfärg
-  if (hexMatch && homePage.brand) homePage.brand.primary_color = primaryColor;
-
-  // Spara i Supabase
-  let site;
+  // Steg 2: Spara i Supabase
   if (siteId) {
-    const { data } = await supabase.from("sites").update({
+    await supabase.from("sites").update({
       name: homePage.brand?.name ?? companyName,
       brand: homePage.brand,
       seo: homePage.seo,
       sections: homePage.sections,
-    }).eq("id", siteId).eq("user_id", user.id).select().maybeSingle();
-    site = data;
+    }).eq("id", siteId).eq("user_id", user.id);
   } else {
-    const { data } = await supabase.from("sites").insert({
+    await supabase.from("sites").insert({
       user_id: user.id,
       name: homePage.brand?.name ?? companyName,
       subdomain,
@@ -156,33 +121,62 @@ export async function POST(req: NextRequest) {
       brand: homePage.brand,
       seo: homePage.seo,
       sections: homePage.sections,
-    }).select().maybeSingle();
-    site = data;
+    });
   }
 
-  // Skapa WP-subsajt
-  await createWPSite(subdomain, homePage.brand?.name ?? companyName, wpApiKey);
+  // Steg 3: Returnera direkt till klienten — WP-publicering sker asynkront
+  // Vi använder waitUntil-mönster: svara snabbt, fortsätt i bakgrunden
+  const publishAll = async () => {
+    // Skapa WP-subsajt
+    await createWPSite(subdomain, homePage.brand?.name ?? companyName, wpApiKey);
 
-  // Publicera startsidan
-  if (wpUrl && wpApiKey) {
+    // Publicera startsidan
     await publishToWordPress(homePage, { baseUrl: wpUrl, apiKey: wpApiKey }).catch(console.error);
-  }
 
-  // Generera och publicera undersidor asynkront (efter att vi returnerat)
-  const subPages = ["om-oss", "tjanster", "kontakt"];
-  (async () => {
-    for (const pageType of subPages) {
+    // Generera och publicera undersidor
+    const subPageTypes = [
+      { slug: "om-oss", title: "Om oss", sections: "hero, image_text (med checklist 6 punkter), stats (3-4 nyckeltal), cta_band" },
+      { slug: "tjanster", title: "Tjänster", sections: "hero, feature_grid (detaljerade tjänster med nummer), cta_band" },
+      { slug: "kontakt", title: "Kontakt", sections: "contact" },
+    ];
+
+    for (const sp of subPageTypes) {
       try {
-        const page = await generatePage(pageType, companyName, answers, primaryColor, homePage.brand ?? null);
-        if (page) {
-          if (hexMatch && page.brand) page.brand.primary_color = primaryColor;
-          await publishToWordPress(page, { baseUrl: wpUrl, apiKey: wpApiKey }).catch(console.error);
+        const spMessage = await client.messages.create({
+          model: "claude-sonnet-4-5",
+          max_tokens: 1500,
+          messages: [{
+            role: "user",
+            content: `Generera sidan "${sp.title}" (slug: "${sp.slug}") som JSON. Svara ENDAST med giltig JSON.
+
+{
+  "brand": { "name": "${homePage.brand?.name ?? companyName}", "primary_color": "${primaryColor}", "tone": "professional" },
+  "page": { "title": "${sp.title}", "slug": "${sp.slug}", "is_front_page": false, "template": "page" },
+  "seo": { "meta_title": "string", "meta_description": "string", "focus_keyword": "string" },
+  "sections": [ /* ${sp.sections} */ ]
+}
+
+Tillgängliga sektioner: hero, usp_row, feature_grid, image_text, stats, testimonial, faq, cta_band, contact
+Företag: ${homePage.brand?.name ?? companyName}
+Tjänster: ${answers[0] ?? ""}
+Primärfärg: ${primaryColor}
+Skriv professionell säljande svenska.`,
+          }],
+        });
+        const spContent = spMessage.content[0];
+        if (spContent.type === "text") {
+          const spPage = JSON.parse(spContent.text.replace(/```json|```/g, "").trim()) as Payload;
+          if (spPage.brand) spPage.brand.primary_color = primaryColor;
+          await publishToWordPress(spPage, { baseUrl: wpUrl, apiKey: wpApiKey }).catch(console.error);
         }
       } catch (err) {
-        console.error(`Failed to generate page ${pageType}:`, err);
+        console.error(`Failed to generate ${sp.slug}:`, err);
       }
     }
-  })();
+  };
+
+  // Kör asynkront utan att blockera svaret
+  publishAll().catch(console.error);
 
   return NextResponse.json({ success: true, subdomain, wp_url: wpUrl });
 }
