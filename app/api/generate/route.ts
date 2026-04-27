@@ -10,10 +10,44 @@ const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 function slugify(text: string): string {
   return text.toLowerCase()
+    .replace(/[åä]/g, "a").replace(/ö/g, "o")
     .replace(/[^a-z0-9]/g, "-")
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "")
     .slice(0, 30);
+}
+
+async function createWPSite(subdomain: string, siteName: string, apiKey: string): Promise<boolean> {
+  const networkApiUrl = process.env.AIWEBB_WP_NETWORK_URL;
+  const networkApiKey = process.env.AIWEBB_WP_NETWORK_KEY;
+
+  if (!networkApiUrl || !networkApiKey) {
+    console.error("Network API not configured");
+    return false;
+  }
+
+  try {
+    const res = await fetch(`${networkApiUrl}/wp-json/aiwebb-network/v1/create-site`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${networkApiKey}`,
+      },
+      body: JSON.stringify({ subdomain, site_name: siteName, api_key: apiKey }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      console.error("WP site creation failed:", data);
+      return false;
+    }
+
+    console.log("WP site created:", data);
+    return true;
+  } catch (err) {
+    console.error("WP network API error:", err);
+    return false;
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -31,6 +65,7 @@ export async function POST(req: NextRequest) {
 
   const companyName = profile?.company_name ?? answers[0] ?? "";
 
+  // Generera AI-innehåll
   const message = await client.messages.create({
     model: "claude-sonnet-4-5",
     max_tokens: 4000,
@@ -42,7 +77,7 @@ Schema:
 {
   "page": { "title": "string", "slug": "hem", "is_front_page": true, "template": "landing" },
   "brand": { "name": "string", "primary_color": "#hex", "tone": "professional" },
-  "seo": { "meta_title": "string", "meta_description": "string", "focus_keyword": "string" },
+  "seo": { "meta_title": "string (max 60 tecken)", "meta_description": "string (max 155 tecken)", "focus_keyword": "string" },
   "sections": [
     { "type": "hero", "data": { "eyebrow": "string", "headline": "string", "subheadline": "string", "primary_cta": { "label": "string", "url": "#kontakt" }, "secondary_cta": { "label": "string", "url": "#om" } } },
     { "type": "usp_row", "data": { "items": [{ "icon": "emoji", "label": "string", "description": "string" }, { "icon": "emoji", "label": "string", "description": "string" }, { "icon": "emoji", "label": "string", "description": "string" }] } },
@@ -58,7 +93,7 @@ Tjanster: ${answers[0] ?? ""}
 Malgrupp: ${answers[1] ?? ""}
 Fordelar: ${answers[2] ?? ""}
 Erbjudande: ${answers[3] ?? ""}
-Rimarfarg: ${answers[4] ?? "#0F1012"}
+Farg: ${answers[4] ?? "#0F1012"}
 
 Skriv professionell saljande svenska.`,
     }],
@@ -74,6 +109,7 @@ Skriv professionell saljande svenska.`,
     return NextResponse.json({ error: "invalid_json" }, { status: 500 });
   }
 
+  // Generera unik subdomän
   const baseSlug = slugify(companyName || payload.brand?.name || "min-sajt");
   let subdomain = baseSlug;
   let counter = 0;
@@ -85,32 +121,38 @@ Skriv professionell saljande svenska.`,
   }
 
   const wpUrl = "https://" + subdomain + ".aiwebb.se";
+  const wpApiKey = process.env.AIWEBB_WP_API_KEY ?? "testkey_tennisgrus_abc123xyz789";
 
+  // Spara i Supabase
+  let site;
   if (siteId) {
-    await supabase.from("sites").update({
+    const { data } = await supabase.from("sites").update({
       name: payload.brand?.name ?? companyName,
       brand: payload.brand,
       seo: payload.seo,
       sections: payload.sections,
-    }).eq("id", siteId).eq("user_id", user.id);
+    }).eq("id", siteId).eq("user_id", user.id).select().maybeSingle();
+    site = data;
   } else {
-    await supabase.from("sites").insert({
+    const { data } = await supabase.from("sites").insert({
       user_id: user.id,
       name: payload.brand?.name ?? companyName,
       subdomain,
       wp_url: wpUrl,
-      wp_api_key: process.env.AIWEBB_WP_API_KEY ?? "",
+      wp_api_key: wpApiKey,
       brand: payload.brand,
       seo: payload.seo,
       sections: payload.sections,
-    });
+    }).select().maybeSingle();
+    site = data;
   }
 
-  if (process.env.AIWEBB_WP_BASE_URL && process.env.AIWEBB_WP_API_KEY) {
-    await publishToWordPress(payload, {
-      baseUrl: process.env.AIWEBB_WP_BASE_URL,
-      apiKey: process.env.AIWEBB_WP_API_KEY,
-    }).catch(console.error);
+  // Skapa WP-subsajt automatiskt
+  await createWPSite(subdomain, payload.brand?.name ?? companyName, wpApiKey);
+
+  // Publicera till WP
+  if (wpUrl && wpApiKey) {
+    await publishToWordPress(payload, { baseUrl: wpUrl, apiKey: wpApiKey }).catch(console.error);
   }
 
   return NextResponse.json({ success: true, subdomain, wp_url: wpUrl });
