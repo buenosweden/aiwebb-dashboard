@@ -13,6 +13,19 @@ function generateSubdomain(text: string): string {
   return prefix + "-" + num;
 }
 
+async function createWPSite(subdomain: string, siteName: string, apiKey: string): Promise<void> {
+  const networkApiUrl = process.env.AIWEBB_WP_NETWORK_URL;
+  const networkApiKey = process.env.AIWEBB_WP_NETWORK_KEY;
+  if (!networkApiUrl || !networkApiKey) return;
+  try {
+    await fetch(`${networkApiUrl}/wp-json/aiwebb-network/v1/create-site`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${networkApiKey}` },
+      body: JSON.stringify({ subdomain, site_name: siteName, api_key: apiKey }),
+    });
+  } catch (err) { console.error("WP network API error:", err); }
+}
+
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -72,10 +85,8 @@ Skriv professionell säljande svenska.`,
     return NextResponse.json({ error: "invalid_json" }, { status: 500 });
   }
 
-  // Override primärfärg
   if (homePage.brand) homePage.brand.primary_color = primaryColor;
 
-  // Generera subdomän
   const baseSlug = generateSubdomain(companyName || homePage.brand?.name || "ai");
   let subdomain = baseSlug;
   let counter = 0;
@@ -89,7 +100,7 @@ Skriv professionell säljande svenska.`,
   const wpUrl = "https://" + subdomain + ".aiwebb.se";
   const wpApiKey = process.env.AIWEBB_WP_API_KEY ?? "testkey_tennisgrus_abc123xyz789";
 
-  // Spara i Supabase — ingen WP-publicering här, det sker via Publicera-knappen
+  // Spara i Supabase
   if (siteId) {
     await supabase.from("sites").update({
       name: homePage.brand?.name ?? companyName,
@@ -109,6 +120,9 @@ Skriv professionell säljande svenska.`,
       sections: homePage.sections,
     });
   }
+
+  // Skapa WP-subsajt (snabbt anrop, blockar inte länge)
+  await createWPSite(subdomain, homePage.brand?.name ?? companyName, wpApiKey);
 
   return NextResponse.json({ success: true, subdomain, wp_url: wpUrl });
 }
