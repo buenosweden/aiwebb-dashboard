@@ -85,7 +85,10 @@ Skriv professionell säljande svenska.`,
     return NextResponse.json({ error: "invalid_json" }, { status: 500 });
   }
 
-  if (homePage.brand) homePage.brand.primary_color = primaryColor;
+  if (homePage.brand) {
+    homePage.brand.primary_color = primaryColor;
+    homePage.brand.theme_id = "edge";
+  }
 
   const baseSlug = generateSubdomain(companyName || homePage.brand?.name || "ai");
   let subdomain = baseSlug;
