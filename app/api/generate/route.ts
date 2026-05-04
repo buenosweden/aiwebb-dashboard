@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const { answers, siteId } = await req.json();
+  const { answers, siteId, siteType = "full" } = await req.json();
 
   const { data: profile } = await supabase
     .from("profiles")
@@ -45,12 +45,14 @@ export async function POST(req: NextRequest) {
   const primaryColor = hexMatch ? hexMatch[0] : "#0F1012";
 
   // Generera startsidan med AI
+  const isLanding = siteType === "landing";
+
   const message = await client.messages.create({
     model: "claude-sonnet-4-5",
     max_tokens: 2000,
     messages: [{
       role: "user",
-      content: `Generera startsidan som JSON. Svara ENDAST med giltig JSON, inga backticks.
+      content: `Generera ${isLanding ? "en landningssida (one-pager med alla sektioner på en sida)" : "startsidan"} som JSON. Svara ENDAST med giltig JSON, inga backticks.
 
 {
   "brand": { "name": "string", "primary_color": "${primaryColor}", "tone": "professional" },
@@ -88,6 +90,7 @@ Skriv professionell säljande svenska.`,
   if (homePage.brand) {
     homePage.brand.primary_color = primaryColor;
     homePage.brand.theme_id = "edge";
+    homePage.brand.site_type = siteType;
   }
 
   const baseSlug = generateSubdomain(companyName || homePage.brand?.name || "ai");
@@ -121,6 +124,7 @@ Skriv professionell säljande svenska.`,
       brand: homePage.brand,
       seo: homePage.seo,
       sections: homePage.sections,
+      site_type: siteType,
     });
   }
 
