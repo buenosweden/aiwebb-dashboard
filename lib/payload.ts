@@ -1,12 +1,5 @@
 /**
  * TypeScript-typer för payload-schemat.
- *
- * Det här är samma schema som aiwebb-publisher-pluginet validerar mot.
- * Det är KONTRAKTET mellan dashboardet och WordPress — om du ändrar här
- * måste du också ändra i plugin/includes/class-aiwebb-validator.php.
- *
- * När vi senare migrerar till headless blir detta kontraktet mellan
- * dashboardet och vår egna renderer. Inget annat ändras.
  */
 
 export type SectionType =
@@ -16,7 +9,12 @@ export type SectionType =
   | "table"
   | "cta_band"
   | "faq"
-  | "feature_grid";
+  | "feature_grid"
+  | "image_text"
+  | "stats"
+  | "testimonial"
+  | "contact"
+  | "team";
 
 export interface CTA {
   label: string;
@@ -39,76 +37,69 @@ export interface HeroSection {
 
 export interface UspRowSection {
   type: "usp_row";
-  data: {
-    items: Array<{
-      icon?: string;
-      label: string;
-      description?: string;
-    }>;
-  };
+  data: { items: Array<{ icon?: string; label: string; description?: string }>; };
 }
 
 export interface TextBlockSection {
   type: "text_block";
-  data: {
-    heading: string;
-    body: string;
-    layout?: "single" | "two-col";
-  };
+  data: { heading: string; body: string; layout?: "single" | "two-col"; };
 }
 
 export interface TableSection {
   type: "table";
-  data: {
-    heading: string;
-    intro?: string;
-    columns: string[];
-    rows: string[][];
-  };
+  data: { heading: string; intro?: string; columns: string[]; rows: string[][]; };
 }
 
 export interface CtaBandSection {
   type: "cta_band";
-  data: {
-    heading: string;
-    body?: string;
-    cta: CTA;
-    background?: "accent" | "muted" | "dark";
-  };
+  data: { heading: string; body?: string; cta: CTA; background?: "accent" | "muted" | "dark"; };
 }
 
 export interface FaqSection {
   type: "faq";
   data: {
     heading: string;
-    items: Array<{
-      question: string;
-      answer: string;
-    }>;
+    subtitle?: string;
+    body?: string;
+    cta?: CTA;
+    items: Array<{ question: string; answer: string }>;
   };
 }
 
 export interface FeatureGridSection {
   type: "feature_grid";
-  data: {
-    heading: string;
-    intro?: string;
-    items: Array<{
-      title: string;
-      description: string;
-      icon?: string;
-    }>;
-  };
+  data: { heading: string; intro?: string; items: Array<{ title: string; description: string; icon?: string }>; };
+}
+
+export interface ImageTextSection {
+  type: "image_text";
+  data: { subtitle?: string; heading: string; body?: string; image_url?: string; cta?: CTA; checklist?: string[]; };
+}
+
+export interface StatsSection {
+  type: "stats";
+  data: { items: Array<{ value: string; label: string; description?: string }>; };
+}
+
+export interface TestimonialSection {
+  type: "testimonial";
+  data: { quote: string; name: string; title?: string; };
+}
+
+export interface ContactSection {
+  type: "contact";
+  data: { subtitle?: string; heading: string; body?: string; phone?: string; form_title?: string; cta_label?: string; };
+}
+
+export interface TeamSection {
+  type: "team";
+  data: { subtitle?: string; heading: string; members: Array<{ name: string; role?: string; bio?: string; image_url?: string }>; };
 }
 
 export type Section =
-  | HeroSection
-  | UspRowSection
-  | TextBlockSection
-  | TableSection
-  | CtaBandSection
-  | FaqSection
-  | FeatureGridSection;
+  | HeroSection | UspRowSection | TextBlockSection | TableSection
+  | CtaBandSection | FaqSection | FeatureGridSection | ImageTextSection
+  | StatsSection | TestimonialSection | ContactSection | TeamSection;
 
 export interface Brand {
   name?: string;
@@ -116,6 +107,8 @@ export interface Brand {
   secondary_color?: string;
   tone?: "professional" | "warm" | "direct" | "playful";
   logo_url?: string;
+  theme_id?: "edge" | "clean" | "warm";
+  site_type?: "landing" | "full";
 }
 
 export interface SEO {
